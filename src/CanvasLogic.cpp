@@ -119,13 +119,26 @@ void CanvasLogic::ProcessPreciseEraser(std::vector<Stroke>& strokes, ImVec2 relP
         std::vector<ImVec2> seg;
         for (const auto& p : s.points) {
             if (GetDistance(p, relPos) <= eraserSize + s.thickness) {
-                if (seg.size() >= 2) next.push_back({seg, s.color, s.thickness});
+                if (seg.size() >= 2) next.push_back({seg, s.color, s.thickness, s.isQuality});
                 seg.clear();
             } else {
                 seg.push_back(p);
             }
         }
-        if (seg.size() >= 2) next.push_back({seg, s.color, s.thickness});
+        if (seg.size() >= 2) next.push_back({seg, s.color, s.thickness, s.isQuality});
     }
     strokes = std::move(next);
+}
+
+void CanvasLogic::ProcessQualityBrush(std::vector<Stroke>& strokes, ImVec2 relPos, ImU32 color, float size, bool& isDrawing) {
+    if (ImGui::IsMouseClicked(0)) {
+        isDrawing = true;
+        strokes.push_back(Stroke({relPos}, color, size, true));
+    }
+    if (isDrawing && ImGui::IsMouseDown(0)) {
+        Stroke& s = strokes.back();
+        if (GetDistance(s.points.back(), relPos) > 5.0f) { // 采样距离稍大一点，给插值留空间
+            s.points.push_back(relPos);
+        }
+    }
 }

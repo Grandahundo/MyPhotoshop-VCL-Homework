@@ -9,4 +9,5 @@ public:
     static void ProcessCircle(std::vector<Stroke>& strokes, ImVec2 relPos, ImVec2& startPos, ImU32 color, float size, bool& isDrawing);
     static void ProcessStrokeEraser(std::vector<Stroke>& strokes, ImVec2 relPos, float eraserSize);
     static void ProcessPreciseEraser(std::vector<Stroke>& strokes, ImVec2 relPos, float eraserSize);
+    static void ProcessQualityBrush(std::vector<Stroke>& strokes, ImVec2 relPos, ImU32 color, float size, bool& isDrawing);
 };

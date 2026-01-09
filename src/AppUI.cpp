@@ -9,6 +9,7 @@ std::vector<Stroke> AppUI::strokes;
 bool AppUI::isDrawing = false;
 ImVec2 AppUI::rectStartPos = {0,0};
 
+
 void AppUI::Render(bool& shouldBake) {
     Sidebar();
     Canvas();
@@ -28,6 +29,7 @@ void AppUI::Sidebar() {
     if (ImGui::RadioButton("Circle", currentTool == Tool::Circle)) currentTool = Tool::Circle;
     if (ImGui::RadioButton("StrokeEraser", currentTool == Tool::StrokeEraser)) currentTool = Tool::StrokeEraser;
     if (ImGui::RadioButton("PreciseEraser", currentTool == Tool::PreciseEraser)) currentTool = Tool::PreciseEraser;
+    if (ImGui::RadioButton("QualityBrush", currentTool == Tool::QualityBrush)) currentTool = Tool::QualityBrush;
     
     ImGui::SliderFloat("Size", &brushSize, 1, 50);
     ImGui::ColorEdit4("Color", (float*)&brushColor);
@@ -37,6 +39,7 @@ void AppUI::Sidebar() {
     
     ImGui::End();
 }
+
 
 void AppUI::Canvas() {
     ImGui::SetNextWindowPos({250, 0});
@@ -59,6 +62,7 @@ void AppUI::Canvas() {
         else if (currentTool == Tool::Circle) CanvasLogic::ProcessCircle(strokes, relPos, rectStartPos, ImGui::ColorConvertFloat4ToU32(brushColor), brushSize, isDrawing);
         else if (currentTool == Tool::StrokeEraser && ImGui::IsMouseDown(0)) CanvasLogic::ProcessStrokeEraser(strokes, relPos, brushSize);
         else if (currentTool == Tool::PreciseEraser && ImGui::IsMouseDown(0)) CanvasLogic::ProcessPreciseEraser(strokes, relPos, brushSize);
+        else if (currentTool == Tool::QualityBrush && ImGui::IsMouseDown(0)) CanvasLogic::ProcessQualityBrush(strokes, relPos, ImGui::ColorConvertFloat4ToU32(brushColor), brushSize, isDrawing);
     }
     if (ImGui::IsMouseReleased(0)) isDrawing = false;
 
@@ -66,7 +70,8 @@ void AppUI::Canvas() {
     for (const auto& s : strokes) {
         std::vector<ImVec2> screenPts;
         for (auto p : s.points) screenPts.push_back({p.x + p0.x, p.y + p0.y});
-        dl->AddPolyline(screenPts.data(), (int)screenPts.size(), s.color, 0, s.thickness);
+        DrawStroke(dl, s, p0);
+        // dl->AddPolyline(screenPts.data(), (int)screenPts.size(), s.color, 0, s.thickness);
     }
 
     ImGui::End();
