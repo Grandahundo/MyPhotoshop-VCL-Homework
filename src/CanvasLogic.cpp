@@ -1,5 +1,8 @@
 #include "CanvasLogic.h"
+#include <string>
 #include <algorithm>
+
+#define DEFAULT_BRUSH "brush_ink"
 
 float CanvasLogic::GetDistance(ImVec2 p1, ImVec2 p2) {
     return std::sqrt(std::pow(p1.x - p2.x, 2) + std::pow(p1.y - p2.y, 2));
@@ -24,10 +27,10 @@ std::vector<ImVec2> densify(std::vector<ImVec2> s, int iter = 2) {
     return dense;
 }
 
-void CanvasLogic::ProcessBrush(std::vector<Stroke>& strokes, ImVec2 relPos, ImU32 color, float size, bool& isDrawing, BrushType brushType) {
+void CanvasLogic::ProcessBrush(std::vector<Stroke>& strokes, ImVec2 relPos, ImU32 color, float size, bool& isDrawing, std::string brushName) {
     if (ImGui::IsMouseClicked(0)) {
         isDrawing = true;
-        strokes.push_back(Stroke({relPos}, color, size, "default"));
+        strokes.push_back(Stroke({relPos}, color, size, brushName));
     }
     if (isDrawing && ImGui::IsMouseDown(0)) {
         if (GetDistance(strokes.back().points.back(), relPos) > 2.0f)
@@ -40,7 +43,7 @@ void CanvasLogic::ProcessRectangle(std::vector<Stroke>& strokes, ImVec2 relPos, 
         isDrawing = true;
         startPos = relPos;
         std::vector<ImVec2> pts(5, relPos);
-        strokes.push_back(Stroke(pts, color, size, "default"));
+        strokes.push_back(Stroke(pts, color, size, DEFAULT_BRUSH));
     }
     if (isDrawing && ImGui::IsMouseDown(0)) {
         Stroke& s = strokes.back();
@@ -60,13 +63,14 @@ void CanvasLogic::ProcessRectangle(std::vector<Stroke>& strokes, ImVec2 relPos, 
         des.push_back({startPos.x, relPos.y});
         des.push_back(startPos);
         // s.points.push_back(startPos);
+        const int SPLIT = 5;
         for (int k = 1; k < 5; k++) {
             ImVec2 lst = des[k - 1];
             ImVec2 cur = des[k];
-            for (int i = 0; i < 100; i++) {
+            for (int i = 0; i < SPLIT; i++) {
                 ImVec2 mid = {
-                    ((100 - i) * lst.x + i * cur.x) / 100,
-                    ((100 - i) * lst.y + i * cur.y) / 100
+                    ((SPLIT - i) * lst.x + i * cur.x) / SPLIT,
+                    ((SPLIT - i) * lst.y + i * cur.y) / SPLIT
                 };
                 s.points.push_back(mid);
             }
@@ -82,7 +86,7 @@ void CanvasLogic::ProcessCircle(std::vector<Stroke>& strokes, ImVec2 relPos, ImV
         isDrawing = true;
         startPos = relPos;
         std::vector<ImVec2> pts(360, relPos);
-        strokes.push_back(Stroke(pts, color, size, "default"));
+        strokes.push_back(Stroke(pts, color, size, DEFAULT_BRUSH));
     }
     if (isDrawing && ImGui::IsMouseDown(0)) {
         Stroke& s = strokes.back();

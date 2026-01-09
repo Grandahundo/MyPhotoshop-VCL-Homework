@@ -2,9 +2,11 @@
 #include "Renderer.h"
 #include "CanvasLogic.h"
 #include <iostream>
+#include <string>
 
 Tool AppUI::currentTool = Tool::Brush;
 BrushType AppUI::brushType = BrushType::Solid;
+std::string brushName;
 float AppUI::brushSize = 5.0f;
 ImVec4 AppUI::brushColor = {1,0,0,1};
 std::vector<Stroke> AppUI::strokes;
@@ -24,7 +26,8 @@ void RenderStroke(ImDrawList* dl, const Stroke& s, ImVec2 canvasP0) {
     // if (s.brushType == BrushType::Crayon)      { texID = Renderer::texCrayon;     spacingFactor = 0.15f; }
     // else if (s.brushType == BrushType::Pencil) { texID = Renderer::texPencil;     spacingFactor = 0.05f; }
     // else if (s.brushType == BrushType::Watercolor) { texID = Renderer::texWatercolor; spacingFactor = 0.3f; }
-
+    // std::cout << s.brushName << std::endl;
+    // std::cout << texID << std::endl;
     // 2. 如果是普通笔刷，直接用 ImGui 原生线段（确保至少能看到东西）
     if (texID == 0) {
         std::vector<ImVec2> absPts;
@@ -130,7 +133,7 @@ void AppUI::Sidebar() {
     } else {
         ImGui::Text("No brushes found in /assets");
     }
-
+    brushName = Renderer::brushNames[currentBrushIdx];
 
     // 在 AppUI::Sidebar() 中
     ImGui::Text("Brush Settings");
@@ -167,7 +170,7 @@ void AppUI::Canvas() {
 
     // 2. 交互
     if (ImGui::IsWindowHovered()) {
-        if (currentTool == Tool::Brush) CanvasLogic::ProcessBrush(strokes, relPos, ImGui::ColorConvertFloat4ToU32(brushColor), brushSize, isDrawing, brushType);
+        if (currentTool == Tool::Brush) CanvasLogic::ProcessBrush(strokes, relPos, ImGui::ColorConvertFloat4ToU32(brushColor), brushSize, isDrawing, brushName);
         else if (currentTool == Tool::Rectangle) CanvasLogic::ProcessRectangle(strokes, relPos, rectStartPos, ImGui::ColorConvertFloat4ToU32(brushColor), brushSize, isDrawing);
         else if (currentTool == Tool::Circle) CanvasLogic::ProcessCircle(strokes, relPos, rectStartPos, ImGui::ColorConvertFloat4ToU32(brushColor), brushSize, isDrawing);
         else if (currentTool == Tool::StrokeEraser && ImGui::IsMouseDown(0)) CanvasLogic::ProcessStrokeEraser(strokes, relPos, brushSize);
@@ -177,11 +180,7 @@ void AppUI::Canvas() {
 
     // 3. 矢量层渲染
     for (const auto& s : strokes) {
-        // DrawStroke(dl, s, p0);
         RenderStroke(dl, s, p0);
-        // std::vector<ImVec2> screenPts;
-        // for (auto p : s.points) screenPts.push_back({p.x + p0.x, p.y + p0.y});
-        // dl->AddPolyline(screenPts.data(), (int)screenPts.size(), s.color, 0, s.thickness);
     }
 
     ImGui::End();
