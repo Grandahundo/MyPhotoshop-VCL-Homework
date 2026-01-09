@@ -6,6 +6,7 @@
 #include "AppUI.h"
 
 int main() {
+    
     glfwInit();
     GLFWwindow* window = glfwCreateWindow(1280, 720, "Multi-File Paint", NULL, NULL);
     glfwMakeContextCurrent(window);

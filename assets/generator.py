@@ -1,97 +1,113 @@
+import os
 from PIL import Image, ImageDraw, ImageFilter
 import numpy as np
 import random
 
-def save_brush(image, name):
-    image.save(f"{name}.png")
-    print(f"已生成笔刷: {name}.png")
+# 创建保存目录
+output_dir = "assets"
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
 
-def create_crayon(size=256):
-    """
-    蜡笔：边缘破碎，内部有强烈的随机噪点（积蜡感）
-    """
-    # 创建透明背景
-    img = Image.new("RGBA", (size, size), (255, 255, 255, 0))
-    canvas = np.zeros((size, size), dtype=np.uint8)
-    
-    center = size // 2
-    radius = size // 2 - 10
-    
+def save_brush(image, name):
+    path = os.path.join(output_dir, f"brush_{name}.png")
+    image.save(path)
+    print(f"已生成笔刷: {path}")
+
+def get_circular_mask(size, feather=0.9):
+    """生成一个圆形的 Alpha 遮罩，确保边缘干净"""
+    mask = np.zeros((size, size), dtype=np.float32)
+    center = size / 2
     for y in range(size):
         for x in range(size):
             dist = np.sqrt((x - center)**2 + (y - center)**2)
-            if dist < radius:
-                # 越往边缘，消失概率越高（破碎感）
-                edge_factor = (radius - dist) / radius
-                # 混合多种噪点
-                noise = random.randint(0, 255) 
-                if noise > (100 + 155 * edge_factor):
-                    canvas[y, x] = 0
-                else:
-                    # 随机透明度，模拟蜡笔留白
-                    canvas[y, x] = random.randint(150, 255)
-    
-    # 转换为图像并添加轻微模糊，使其不过于锐利
-    alpha_channel = Image.fromarray(canvas, mode='L')
-    img.putalpha(alpha_channel)
-    img = img.filter(ImageFilter.GaussianBlur(radius=0.5))
-    save_brush(img, "brush_crayon")
+            # 半径内的衰减
+            if dist < center:
+                # feather 控制边缘硬度，1.0 是硬圆，越小越模糊
+                opacity = np.clip((center - dist) / (center * (1 - feather + 0.01)), 0, 1)
+                mask[y, x] = opacity
+    return mask
 
-def create_pencil(size=64):
-    """
-    铅笔：体积极小，石墨颗粒感，中心实边缘虚
-    """
+def create_base_white_image(size, alpha_data):
+    """将 Alpha 数据应用到纯白图像上"""
     img = Image.new("RGBA", (size, size), (255, 255, 255, 0))
-    canvas = np.zeros((size, size), dtype=np.uint8)
-    
-    center = size // 2
-    for _ in range(size * size): # 随机撒点
-        x = random.gauss(center, size/4)
-        y = random.gauss(center, size/4)
-        if 0 <= x < size and 0 <= y < size:
-            # 颗粒非常细碎
-            lx, ly = int(x), int(y)
-            canvas[ly, lx] = min(255, canvas[ly, lx] + random.randint(50, 200))
-
-    alpha_channel = Image.fromarray(canvas, mode='L')
+    alpha_channel = Image.fromarray(alpha_data.astype(np.uint8), mode='L')
     img.putalpha(alpha_channel)
-    save_brush(img, "brush_pencil")
+    return img
+
+def create_crayon(size=256):
+    mask = get_circular_mask(size, 0.8)
+    # 强烈的随机噪点
+    noise = np.random.randint(100, 255, (size, size)).astype(np.float32)
+    # 增加一点块状感
+    alpha = noise * mask * (np.random.rand(size, size) > 0.2)
+    save_brush(create_base_white_image(size, alpha), "crayon")
+
+def create_pencil(size=128):
+    mask = get_circular_mask(size, 0.5)
+    noise = np.random.normal(200, 50, (size, size)).astype(np.float32)
+    alpha = np.clip(noise * mask, 0, 255)
+    save_brush(create_base_white_image(size, alpha), "pencil")
 
 def create_watercolor(size=512):
-    """
-    水彩：边缘湿润感（边缘深，中间浅），不规则的浸润扩散
-    """
-    img = Image.new("RGBA", (size, size), (255, 255, 255, 0))
-    # 1. 先画一个大模糊圆
-    alpha = Image.new("L", (size, size), 0)
-    draw = ImageDraw.Draw(alpha)
-    
-    margin = 40
-    draw.ellipse([margin, margin, size-margin, size-margin], fill=120)
-    
-    # 2. 模拟“水渍边缘”（Wet Edge）
-    # 在边缘画一圈颜色更深的细线
-    draw.ellipse([margin+5, margin+5, size-margin-5, size-margin-5], fill=60) # 减淡中间
-    
-    # 3. 高斯模糊让它晕染开
-    alpha = alpha.filter(ImageFilter.GaussianBlur(radius=20))
-    
-    # 4. 增加一点点有机的不规则纹理（水流动的痕迹）
-    alpha_np = np.array(alpha)
-    for _ in range(10):
-        # 随机画几个模糊的大泡泡增加不均匀感
-        x, y = random.randint(0, size), random.randint(0, size)
-        r = random.randint(50, 150)
-        temp_img = Image.new("L", (size, size), 0)
-        temp_draw = ImageDraw.Draw(temp_img)
-        temp_draw.ellipse([x-r, y-r, x+r, y+r], fill=random.randint(10, 30))
-        temp_img = temp_img.filter(ImageFilter.GaussianBlur(radius=30))
-        alpha_np = np.clip(alpha_np + np.array(temp_img), 0, 255)
+    mask = get_circular_mask(size, 0.1) # 极软的边缘
+    alpha = (mask * 150).astype(np.float32)
+    # 模拟水渍边缘：强化边缘
+    edge_enhancement = get_circular_mask(size, 0.95) - get_circular_mask(size, 0.85)
+    alpha += edge_enhancement * 100
+    # 模糊处理
+    img = create_base_white_image(size, np.clip(alpha, 0, 255))
+    img = img.filter(ImageFilter.GaussianBlur(radius=5))
+    save_brush(img, "watercolor")
 
-    img.putalpha(Image.fromarray(alpha_np.astype(np.uint8)))
-    save_brush(img, "brush_watercolor")
+def create_oil(size=256):
+    """油画：具有条纹纹理"""
+    mask = get_circular_mask(size, 0.9)
+    alpha = np.zeros((size, size), dtype=np.float32)
+    for i in range(size):
+        # 创建纵向条纹
+        line_noise = np.random.randint(150, 255)
+        if random.random() > 0.3:
+            alpha[:, i] = line_noise
+    # 模糊和旋转模拟刷毛
+    img = create_base_white_image(size, alpha * mask)
+    img = img.rotate(random.randint(0, 360))
+    img = img.filter(ImageFilter.GaussianBlur(radius=1))
+    save_brush(img, "oil")
+
+def create_chalk(size=256):
+    """粉笔：松散、多孔"""
+    mask = get_circular_mask(size, 0.7)
+    noise = np.random.choice([0, 200, 255], size=(size, size), p=[0.6, 0.2, 0.2]).astype(np.float32)
+    img = create_base_white_image(size, noise * mask)
+    img = img.filter(ImageFilter.MedianFilter(size=3))
+    save_brush(img, "chalk")
+
+def create_spray(size=512):
+    """喷漆：颗粒状扩散"""
+    mask = get_circular_mask(size, 0.0) # 极其发散
+    # 距离中心的概率分布
+    noise = np.random.rand(size, size).astype(np.float32)
+    alpha = (noise < mask) * 255 * (mask ** 2)
+    img = create_base_white_image(size, alpha)
+    img = img.filter(ImageFilter.GaussianBlur(radius=1))
+    save_brush(img, "spray")
+
+def create_ink(size=256):
+    """墨水：边缘轻微扩散"""
+    mask = get_circular_mask(size, 0.9)
+    img = Image.new("L", (size, size), 0)
+    draw = ImageDraw.Draw(img)
+    draw.ellipse([size*0.1, size*0.1, size*0.9, size*0.9], fill=255)
+    # 扩散效果
+    img = img.filter(ImageFilter.GaussianBlur(radius=10))
+    alpha = np.array(img).astype(np.float32) * mask
+    save_brush(create_base_white_image(size, alpha), "ink")
 
 if __name__ == "__main__":
     create_crayon()
     create_pencil()
     create_watercolor()
+    create_oil()
+    create_chalk()
+    create_spray()
+    create_ink()

@@ -9,6 +9,7 @@ private:
     static void Canvas();
     
     static Tool currentTool;
+    static BrushType brushType;
     static float brushSize;
     static ImVec4 brushColor;
     static std::vector<Stroke> strokes;

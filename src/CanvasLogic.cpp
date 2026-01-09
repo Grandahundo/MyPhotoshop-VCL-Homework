@@ -24,10 +24,10 @@ std::vector<ImVec2> densify(std::vector<ImVec2> s, int iter = 2) {
     return dense;
 }
 
-void CanvasLogic::ProcessBrush(std::vector<Stroke>& strokes, ImVec2 relPos, ImU32 color, float size, bool& isDrawing) {
+void CanvasLogic::ProcessBrush(std::vector<Stroke>& strokes, ImVec2 relPos, ImU32 color, float size, bool& isDrawing, BrushType brushType) {
     if (ImGui::IsMouseClicked(0)) {
         isDrawing = true;
-        strokes.push_back(Stroke({relPos}, color, size));
+        strokes.push_back(Stroke({relPos}, color, size, "default"));
     }
     if (isDrawing && ImGui::IsMouseDown(0)) {
         if (GetDistance(strokes.back().points.back(), relPos) > 2.0f)
@@ -40,7 +40,7 @@ void CanvasLogic::ProcessRectangle(std::vector<Stroke>& strokes, ImVec2 relPos, 
         isDrawing = true;
         startPos = relPos;
         std::vector<ImVec2> pts(5, relPos);
-        strokes.push_back(Stroke(pts, color, size));
+        strokes.push_back(Stroke(pts, color, size, "default"));
     }
     if (isDrawing && ImGui::IsMouseDown(0)) {
         Stroke& s = strokes.back();
@@ -82,7 +82,7 @@ void CanvasLogic::ProcessCircle(std::vector<Stroke>& strokes, ImVec2 relPos, ImV
         isDrawing = true;
         startPos = relPos;
         std::vector<ImVec2> pts(360, relPos);
-        strokes.push_back(Stroke(pts, color, size));
+        strokes.push_back(Stroke(pts, color, size, "default"));
     }
     if (isDrawing && ImGui::IsMouseDown(0)) {
         Stroke& s = strokes.back();
@@ -119,26 +119,13 @@ void CanvasLogic::ProcessPreciseEraser(std::vector<Stroke>& strokes, ImVec2 relP
         std::vector<ImVec2> seg;
         for (const auto& p : s.points) {
             if (GetDistance(p, relPos) <= eraserSize + s.thickness) {
-                if (seg.size() >= 2) next.push_back({seg, s.color, s.thickness, s.isQuality});
+                if (seg.size() >= 2) next.push_back({seg, s.color, s.thickness, s.brushName});
                 seg.clear();
             } else {
                 seg.push_back(p);
             }
         }
-        if (seg.size() >= 2) next.push_back({seg, s.color, s.thickness, s.isQuality});
+        if (seg.size() >= 2) next.push_back({seg, s.color, s.thickness, s.brushName});
     }
     strokes = std::move(next);
-}
-
-void CanvasLogic::ProcessQualityBrush(std::vector<Stroke>& strokes, ImVec2 relPos, ImU32 color, float size, bool& isDrawing) {
-    if (ImGui::IsMouseClicked(0)) {
-        isDrawing = true;
-        strokes.push_back(Stroke({relPos}, color, size, true));
-    }
-    if (isDrawing && ImGui::IsMouseDown(0)) {
-        Stroke& s = strokes.back();
-        if (GetDistance(s.points.back(), relPos) > 5.0f) { // 采样距离稍大一点，给插值留空间
-            s.points.push_back(relPos);
-        }
-    }
 }
