@@ -10,6 +10,12 @@
 
 // --- 数据结构 ---
 struct Stroke {
+    Stroke() {
+
+    }
+    Stroke(std::vector<ImVec2>p, ImU32 c, float t) {
+        points = p, color = c, thickness = t;
+    }
     std::vector<ImVec2> points; // 存储相对画布左上角的坐标 (0~width, 0~height)
     ImU32 color;
     float thickness;
@@ -116,7 +122,6 @@ void PerformBake(std::vector<Stroke>& strokes) {
     g_pendingBake = false;
 }
 
-
 int main() {
     if (!glfwInit()) return 1;
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -195,18 +200,70 @@ int main() {
                     g_strokes.push_back(s);
                 }
                 if (g_isDrawing && ImGui::IsMouseDown(0)) {
-                    if (GetDistance(g_strokes.back().points.back(), relMousePos) > 2.0f)
+                    if (GetDistance(g_strokes.back().points.back(), relMousePos) > 2.0f) {
+                        auto last_point = g_strokes.back().points.back();
+                        g_strokes.back().points.push_back(
+                            ImVec2(
+                                (relMousePos.x + last_point.x) / 2,
+                                (relMousePos.y + last_point.y) / 2
+                            )
+                        );
                         g_strokes.back().points.push_back(relMousePos);
+                    }
                 }
             } else if (g_currentTool == Tool::StrokeEraser && ImGui::IsMouseDown(0)) {
                 g_strokes.erase(std::remove_if(g_strokes.begin(), g_strokes.end(), [&](const Stroke& s) {
                     for (const auto& p : s.points) {
-                        if (GetDistance(p, relMousePos) < g_brushSize) return true;
+                        if (GetDistance(p, relMousePos) < g_brushSize + s.thickness) return true;
                     }
                     return false;
                 }), g_strokes.end());
             } else if (g_currentTool == Tool::PreciseEraser && ImGui::IsMouseDown(0)) {
-                
+                std::vector<Stroke> next_strokes; // 用于存放处理后的所有笔画
+                bool modified = false;
+
+                for (const auto& stroke : g_strokes) {
+                    std::vector<ImVec2> current_segment;
+                    bool stroke_was_cut = false;
+
+                    for (int i = 0; i < (int)stroke.points.size(); i++) {
+                        const ImVec2& p = stroke.points[i];
+                        
+                        // 计算点到橡皮擦的距离
+                        // 注意：这里用距离平方比较，性能更好（省去 sqrt）
+                        float dx = p.x - relMousePos.x;
+                        float dy = p.y - relMousePos.y;
+                        float dist_sq = dx * dx + dy * dy;
+                        float eraser_r = g_brushSize + stroke.thickness;
+
+                        if (dist_sq <= eraser_r * eraser_r) {
+                            // --- 碰撞了！也就是这一段要被“擦掉” ---
+                            stroke_was_cut = true;
+                            modified = true;
+
+                            // 如果当前段已经有点了，说明刚才那段已经断开了，保存成一个新笔画
+                            if (current_segment.size() >= 2) {
+                                next_strokes.push_back({ current_segment, stroke.color, stroke.thickness });
+                            }
+                            current_segment.clear(); // 开启新段的准备
+                        } else {
+                            // --- 没碰撞，保留这个点 ---
+                            current_segment.push_back(p);
+                        }
+                    }
+
+                    // 笔画遍历完了，如果最后一段还有剩下的点，存起来
+                    if (current_segment.size() >= 2) {
+                        next_strokes.push_back({ current_segment, stroke.color, stroke.thickness });
+                    } else if (!stroke_was_cut) {
+                        // 如果这个笔画完全没被碰到过，原封不动放进去
+                        // (虽然上面的逻辑也能处理，但这样写逻辑更清晰)
+                    }
+                }
+
+                if (modified) {
+                    g_strokes = std::move(next_strokes); // 瞬间替换旧数据
+                }
             }
         }
         if (ImGui::IsMouseReleased(0)) g_isDrawing = false;
