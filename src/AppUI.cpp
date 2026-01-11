@@ -103,7 +103,17 @@ void AppUI::Sidebar() {
     if (ImGui::RadioButton("Circle", currentTool == Tool::Circle)) currentTool = Tool::Circle;
     if (ImGui::RadioButton("StrokeEraser", currentTool == Tool::StrokeEraser)) currentTool = Tool::StrokeEraser;
     if (ImGui::RadioButton("PreciseEraser", currentTool == Tool::PreciseEraser)) currentTool = Tool::PreciseEraser;
-    
+    if (ImGui::Button("test")) {
+        for (int i = 0; i < Renderer::brushNames.size(); i++) {
+            ImU32 color = IM_COL32(rand() % 255, rand() % 255, rand() % 255, rand() % 255); // 使用宏创建，最安全
+            std::vector<ImVec2> points;
+            for (int j = 0; j < 100; j++)
+                points.push_back(ImVec2(j * 20, i * 50 + 50));
+            AppUI::strokes.emplace_back(
+                points, color, 15, Renderer::brushNames[i]
+            );
+        }
+    }
     
     static int currentBrushIdx = 0;
     
