@@ -17,79 +17,69 @@ void RenderStroke(ImDrawList* dl, const Stroke& s, ImVec2 canvasP0) {
     if (s.points.size() < 2) return;
     srand(s.id);
 
-    // 1. 确定纹理 ID
     GLuint texID = 0;
-    float spacingFactor = 0.1f; 
-    if (Renderer::brushTextures.count(s.brushName)) {
+    if (Renderer::brushTextures.count(s.brushName)) 
         texID = Renderer::brushTextures[s.brushName];
-    }
-    // if (s.brushType == BrushType::Crayon)      { texID = Renderer::texCrayon;     spacingFactor = 0.15f; }
-    // else if (s.brushType == BrushType::Pencil) { texID = Renderer::texPencil;     spacingFactor = 0.05f; }
-    // else if (s.brushType == BrushType::Watercolor) { texID = Renderer::texWatercolor; spacingFactor = 0.3f; }
-    // std::cout << s.brushName << std::endl;
-    // std::cout << texID << std::endl;
-    // 2. 如果是普通笔刷，直接用 ImGui 原生线段（确保至少能看到东西）
-    if (texID == 0) {
-        std::vector<ImVec2> absPts;
-        for (auto p : s.points) absPts.push_back({ p.x + canvasP0.x, p.y + canvasP0.y });
-        dl->AddPolyline(absPts.data(), (int)absPts.size(), s.color, 0, s.thickness);
-        return;
-    }
 
-    // --- 纹理笔刷逻辑 ---
-    // 强制开启混合模式，否则透明部分会变黑或不可见
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    
+    // 特殊配置参数
+    float spacing = 0.1f;
+    float jitterPos = 0.0f;
+    float jitterSize = 0.0f;
+    bool randomRotation = true;
+
+    // 根据笔刷名字设置特殊表现
+    if (s.brushName.find("star") != std::string::npos) {
+        spacing = 0.8f;      // 星星要稀疏一点，才像撒出来的
+        jitterPos = 2.0f;    // 坐标乱跳
+        jitterSize = 0.5f;   // 大小不一
+    } else if (s.brushName.find("smoke") != std::string::npos) {
+        spacing = 0.2f;
+        jitterSize = 1.2f;   // 烟雾忽大忽小
+    } else if (s.brushName.find("grass") != std::string::npos) {
+        spacing = 0.05f;
+        randomRotation = false; // 草丛通常随鼠标方向，而不是乱转
+    } else if (s.brushName.find("glitch") != std::string::npos) {
+        spacing = 0.3f;
+        jitterPos = 1.5f;
+    }
 
     for (size_t i = 0; i < s.points.size() - 1; i++) {
         ImVec2 p1 = s.points[i];
         ImVec2 p2 = s.points[i+1];
+        float dist = CanvasLogic::GetDistance(p1, p2);
+        float step = fmax(1.0f, s.thickness * spacing);
 
-        float dx = p2.x - p1.x;
-        float dy = p2.y - p1.y;
-        float dist = sqrtf(dx*dx + dy*dy);
+        for (float d = 0; d < dist; d += step) {
+            float t = d / dist;
+            ImVec2 basePos = { p1.x + (p2.x-p1.x)*t + canvasP0.x, p1.y + (p2.y-p1.y)*t + canvasP0.y };
 
-        // 防止 stepSize 过小导致死循环，或者过大导致画不出来
-        // 至少保证 1 像素一个章
-        float stepSize = fmax(1.0f, s.thickness * spacingFactor);
+            // 1. 坐标抖动
+            float px = basePos.x + (rand()%100 - 50)/50.0f * s.thickness * jitterPos;
+            float py = basePos.y + (rand()%100 - 50)/50.0f * s.thickness * jitterPos;
 
-        // 如果两点距离太短，至少画一个章（解决点击不显示问题）
-        int numSteps = (dist < stepSize) ? 1 : (int)(dist / stepSize);
+            // 2. 随机大小
+            float currentSize = s.thickness * (1.0f + (rand()%100 - 50)/50.0f * jitterSize);
 
-        for (int step = 0; step < numSteps; step++) {
-            float t = (numSteps == 1) ? 0.0f : (float)step / (float)numSteps;
-            
-            // 关键：加上画布起始偏移 canvasP0
-            ImVec2 stampPos = { 
-                p1.x + dx * t + canvasP0.x, 
-                p1.y + dy * t + canvasP0.y 
-            };
-
-            float r = s.thickness;
-
-            // --- 实现随机旋转 (AddImageQuad) ---
-            // 如果 AddImage 不显示，通常是 Quad 的顶点顺序错了
-            float angle = (float)(rand() % 360) * (3.14159f / 180.0f);
-            float cosA = cosf(angle);
-            float sinA = sinf(angle);
-
-            // 定义相对于中心点的四个角
-            ImVec2 corners[4] = {
-                {-r, -r}, {r, -r}, {r, r}, {-r, r}
-            };
-
-            ImVec2 q[4];
-            for (int n = 0; n < 4; n++) {
-                // 旋转矩阵计算
-                float rx = corners[n].x * cosA - corners[n].y * sinA;
-                float ry = corners[n].x * sinA + corners[n].y * cosA;
-                q[n] = { stampPos.x + rx, stampPos.y + ry };
+            // 3. 旋转逻辑
+            float angle = 0;
+            if (randomRotation) {
+                angle = (rand() % 360) * (3.1415f / 180.0f);
+            } else {
+                // 如果不随机旋转，就跟随鼠标移动方向
+                angle = atan2f(p2.y - p1.y, p2.x - p1.x);
             }
 
-            // 绘制
+            // 4. 准备绘制顶点
+            float cosA = cosf(angle); float sinA = sinf(angle);
+            ImVec2 corners[4] = {{-currentSize,-currentSize}, {currentSize,-currentSize}, {currentSize,currentSize}, {-currentSize,currentSize}};
+            ImVec2 q[4];
+            for (int n=0; n<4; n++) {
+                q[n].x = px + (corners[n].x * cosA - corners[n].y * sinA);
+                q[n].y = py + (corners[n].x * sinA + corners[n].y * cosA);
+            }
+
             dl->AddImageQuad((ImTextureID)(intptr_t)texID, q[0], q[1], q[2], q[3], 
-                             ImVec2(0,0), ImVec2(1,0), ImVec2(1,1), ImVec2(0,1), s.color);
+                             {0,0}, {1,0}, {1,1}, {0,1}, s.color);
         }
     }
 }
